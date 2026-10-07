@@ -1434,11 +1434,11 @@ CLI11_INLINE void App::_process_env() {
         if(opt->count() == 0 && !opt->envname_.empty()) {
             std::string ename_string = detail::get_environment_value(opt->envname_);
             if(!ename_string.empty()) {
-                std::string result = ename_string;
-                result = opt->_validate(result, 0);
-                if(result.empty()) {
-                    opt->add_result(ename_string);
-                }
+                // Keep a value that fails its validator. Dropping it treated a bad
+                // environment value as unset (#1032). The option callback reports
+                // that failure the same way it does for a command-line value.
+                // Help and version flags at the default priority have already run.
+                opt->add_result(ename_string);
             }
         }
     }

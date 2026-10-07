@@ -2358,6 +2358,41 @@ TEST_CASE_METHOD(TApp, "Env", "[app]") {
     CHECK_THROWS_AS(run(), CLI::RequiredError);
 }
 
+// reported bug #1032 on github: an invalid environment value must fail the
+// same validator a command-line value fails, not fall back to the default
+TEST_CASE_METHOD(TApp, "EnvNameWithValidator", "[app]") {
+    int test{0};
+    app.add_option("-i", test)->envname("CLI11_ENVNAME_WITH_VALIDATOR_BUG")->check(CLI::Range(2, 10));
+
+    put_env("CLI11_ENVNAME_WITH_VALIDATOR_BUG", "1");
+    try {
+        run();
+        FAIL("invalid environment value was accepted");
+    } catch(const CLI::ValidationError &err) {
+        CHECK_THAT(err.what(), Contains("-i"));
+        CHECK_THAT(err.what(), Contains("Value 1 not in range [2 - 10]"));
+    }
+
+    // a command-line value is still checked, and it wins over the environment
+    args = {"-i", "1"};
+    CHECK_THROWS_AS(run(), CLI::ValidationError);
+
+    // help is handled before environment values, so it still wins
+    args = {"-h"};
+    CHECK_THROWS_AS(run(), CLI::CallForHelp);
+
+    args.clear();
+    put_env("CLI11_ENVNAME_WITH_VALIDATOR_BUG", "4");
+    run();
+    CHECK(test == 4);
+
+    args = {"-i", "6"};
+    run();
+    CHECK(test == 6);
+
+    unset_env("CLI11_ENVNAME_WITH_VALIDATOR_BUG");
+}
+
 // curiously check if an environmental only option works
 TEST_CASE_METHOD(TApp, "EnvOnly", "[app]") {
 

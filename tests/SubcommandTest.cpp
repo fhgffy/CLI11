@@ -2524,6 +2524,7 @@ TEST_CASE_METHOD(TApp, "subcommandEnvironmentName", "[subcom]") {
     CHECK_NOTHROW(run());
 
     args = {"sub1", "-v", "111"};
-    CHECK_THROWS_AS(run(), CLI::RequiredError);
+    // The file name came from the environment and failed ExistingFile (#1032).
+    CHECK_THROWS_AS(run(), CLI::ValidationError);
     unset_env("SOME_FILE");
 }
