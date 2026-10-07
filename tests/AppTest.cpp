@@ -2358,6 +2358,63 @@ TEST_CASE_METHOD(TApp, "Env", "[app]") {
     CHECK_THROWS_AS(run(), CLI::RequiredError);
 }
 
+// Invalid environment values are intentionally ignored so they cannot block
+// help, version, or other short-circuit callbacks (see #926 and #1032).
+TEST_CASE_METHOD(TApp, "EnvNameWithValidator", "[app]") {
+    int test{0};
+    auto *opt = app.add_option("-i", test)->envname("CLI11_ENVNAME_WITH_VALIDATOR_BUG")->check(CLI::Range(2, 10));
+
+    put_env("CLI11_ENVNAME_WITH_VALIDATOR_BUG", "1");
+    CHECK_NOTHROW(run());
+    CHECK(test == 0);
+    CHECK(opt->count() == 0);
+
+    args = {"-i", "1"};
+    CHECK_THROWS_AS(run(), CLI::ValidationError);
+
+    // A valid command-line value still overrides an invalid environment value.
+    args = {"-i", "6"};
+    CHECK_NOTHROW(run());
+    CHECK(test == 6);
+
+    args = {"-h"};
+    CHECK_THROWS_AS(run(), CLI::CallForHelp);
+
+    args.clear();
+    put_env("CLI11_ENVNAME_WITH_VALIDATOR_BUG", "4");
+    CHECK_NOTHROW(run());
+    CHECK(test == 4);
+    unset_env("CLI11_ENVNAME_WITH_VALIDATOR_BUG");
+}
+
+TEST_CASE_METHOD(TApp, "EnvNameWithValidatorEarlyPriority", "[app]") {
+    int test{0};
+    auto *opt = app.add_option("-i", test)
+                    ->envname("CLI11_ENVNAME_WITH_VALIDATOR_BUG")
+                    ->check(CLI::Range(2, 10))
+                    ->required();
+    SECTION("First") { opt->callback_priority(CLI::CallbackPriority::First); }
+    SECTION("FirstPreHelp") { opt->callback_priority(CLI::CallbackPriority::FirstPreHelp); }
+
+    put_env("CLI11_ENVNAME_WITH_VALIDATOR_BUG", "1");
+    CHECK_THROWS_AS(run(), CLI::RequiredError);
+    CHECK(opt->count() == 0);
+    CHECK(test == 0);
+    unset_env("CLI11_ENVNAME_WITH_VALIDATOR_BUG");
+}
+
+TEST_CASE_METHOD(TApp, "EnvNameWithValidatorShortCircuit", "[app]") {
+    int test{0};
+    app.add_option("-i", test)->envname("CLI11_ENVNAME_WITH_VALIDATOR_BUG")->check(CLI::Range(2, 10));
+    app.add_flag_callback("--info", []() { throw CLI::CallForVersion("test version", 0); });
+
+    put_env("CLI11_ENVNAME_WITH_VALIDATOR_BUG", "1");
+    args = {"--info"};
+    CHECK_THROWS_AS(run(), CLI::CallForVersion);
+    CHECK(test == 0);
+    unset_env("CLI11_ENVNAME_WITH_VALIDATOR_BUG");
+}
+
 // curiously check if an environmental only option works
 TEST_CASE_METHOD(TApp, "EnvOnly", "[app]") {
 
