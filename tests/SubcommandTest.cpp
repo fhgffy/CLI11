@@ -2505,6 +2505,34 @@ TEST_CASE_METHOD(TApp, "DotNotationSubcommandShortFallthroughRestore", "[subcom]
     CHECK(extras.front() == "--sub1.v=7");
 }
 
+// Invalid environment values must not prevent parent help or version (#926, #1032).
+TEST_CASE_METHOD(TApp, "ImmediateSubcommandEnvironmentPreservesParentHelp", "[subcom]") {
+    auto *sub = app.add_subcommand("sub")->parse_complete_callback([]() {});
+    int test{0};
+    sub->add_option("-i", test)->envname("CLI11_SUBCOMMAND_ENV_VALIDATOR")->check(CLI::Range(2, 10));
+    app.set_version_flag("--version", "test version");
+
+    put_env("CLI11_SUBCOMMAND_ENV_VALIDATOR", "1");
+    SECTION("Parent help before immediate subcommand") {
+        args = {"--help", "sub"};
+        CHECK_THROWS_AS(run(), CLI::CallForHelp);
+    }
+    SECTION("Parent help after immediate subcommand") {
+        args = {"sub", "++", "--help"};
+        CHECK_THROWS_AS(run(), CLI::CallForHelp);
+    }
+    SECTION("Parent version before immediate subcommand") {
+        args = {"--version", "sub"};
+        CHECK_THROWS_AS(run(), CLI::CallForVersion);
+    }
+    SECTION("Parent version after immediate subcommand") {
+        args = {"sub", "++", "--version"};
+        CHECK_THROWS_AS(run(), CLI::CallForVersion);
+    }
+    CHECK(test == 0);
+    unset_env("CLI11_SUBCOMMAND_ENV_VALIDATOR");
+}
+
 // Reported bug #903 on github
 TEST_CASE_METHOD(TApp, "subcommandEnvironmentName", "[subcom]") {
     auto *sub1 = app.add_subcommand("sub1");
@@ -2524,7 +2552,6 @@ TEST_CASE_METHOD(TApp, "subcommandEnvironmentName", "[subcom]") {
     CHECK_NOTHROW(run());
 
     args = {"sub1", "-v", "111"};
-    // The file name came from the environment and failed ExistingFile (#1032).
-    CHECK_THROWS_AS(run(), CLI::ValidationError);
+    CHECK_THROWS_AS(run(), CLI::RequiredError);
     unset_env("SOME_FILE");
 }
